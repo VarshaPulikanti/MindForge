@@ -200,10 +200,25 @@
   min-height: 120px;
 }
 
+.char-count {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.char-count-warn {
+  color: var(--neutral);
+}
+
 .form-actions {
   display: flex;
   gap: 0.65rem;
   flex-wrap: wrap;
+}
+
+.upload-btn.disabled {
+  opacity: 0.5;
+  pointer-events: none;
 }
 
 .upload-btn {
@@ -275,6 +290,63 @@
   max-height: 200px;
   overflow-y: auto;
   margin: 0;
+}
+
+.doc-content-expanded {
+  max-height: none;
+}
+
+.doc-toggle {
+  margin-top: 0.65rem;
+}
+
+.btn-sm {
+  padding: 0.35rem 0.75rem;
+  font-size: 0.85rem;
+}
+
+.nudge-panel {
+  border-color: rgba(108, 140, 255, 0.35);
+  background: rgba(108, 140, 255, 0.06);
+}
+
+.nudge-panel p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+
+.chat-panel-head h2 {
+  margin: 0;
+}
+
+.chat-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin-bottom: 0.85rem;
+}
+
+.suggestion-chip {
+  padding: 0.35rem 0.7rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--muted);
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+}
+
+.suggestion-chip:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--text);
+  background: rgba(108, 140, 255, 0.1);
+}
+
+.suggestion-chip:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .provider {
@@ -484,6 +556,14 @@
 .bubble p {
   margin: 0;
   line-height: 1.6;
+}
+
+.bubble-text {
+  white-space: pre-wrap;
+}
+
+.bubble-typing {
+  opacity: 0.85;
 }
 
 .chat-form {

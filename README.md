@@ -1,21 +1,21 @@
 # MindForge
 
-Full-stack AI text intelligence platform: analyze documents (summary, sentiment, keywords, topics) and chat about them in context.
+Full-stack **local** text intelligence platform: upload or save documents, run analysis (summary, sentiment, keywords), and chat with RAG — no API keys required.
 
 ## Stack
 
-| Layer    | Tech                                      |
-| -------- | ----------------------------------------- |
-| Backend  | Python, FastAPI, SQLAlchemy, SQLite       |
-| AI       | TextBlob (local) + optional OpenAI GPT    |
-| Frontend | React 19, TypeScript, Vite                |
+| Layer    | Tech                                |
+| -------- | ----------------------------------- |
+| Backend  | Python, FastAPI, SQLAlchemy, SQLite |
+| AI       | TextBlob, scikit-learn (TF-IDF RAG) |
+| Frontend | React 19, TypeScript, Vite          |
 
 ## Features
 
-- **Document management** — save, list, delete text documents
-- **AI analysis** — summary, sentiment score, keywords, topics
-- **Contextual chat** — ask questions grounded in your document
-- **Dual AI mode** — works without API key (local NLP); add `OPENAI_API_KEY` for GPT
+- **Document management** — save, upload (.txt/.md/.csv), list, delete
+- **AI analysis** — summary, sentiment, keywords, topics, metrics
+- **RAG chat** — ask questions about the selected document
+- **Fully offline** — runs on your machine, no cloud AI
 
 ## Quick start
 
@@ -33,12 +33,23 @@ python -m venv .venv
 
 pip install -r requirements.txt
 python -m textblob.download_corpora
-copy .env.example .env   # optional: add OPENAI_API_KEY
+```
 
-uvicorn app.main:app --reload --port 8000
+**Windows (recommended)** — frees port 8000 if stuck, runs without `--reload`:
+
+```powershell
+.\run.ps1
+```
+
+**Or manually** (avoid `--reload` on Windows/OneDrive — it can hang):
+
+```bash
+uvicorn app.main:app --port 8000
 ```
 
 API docs: http://127.0.0.1:8000/docs
+
+Database is stored at `%LOCALAPPDATA%\MindForge\mindforge.db` (outside OneDrive to avoid locks).
 
 ### 2. Frontend
 
@@ -50,41 +61,32 @@ npm run dev
 
 Open http://localhost:5173
 
-## Optional: OpenAI
-
-Create `backend/.env`:
-
-```env
-OPENAI_API_KEY=sk-...
-OPENAI_MODEL=gpt-4o-mini
-```
-
-Without a key, the app uses local TextBlob-based analysis and retrieval-style chat.
-
 ## Project structure
 
 ```
 project/
 ├── backend/
 │   ├── app/
-│   │   ├── main.py           # FastAPI app
-│   │   ├── models.py         # SQLAlchemy models
-│   │   ├── routers/          # API routes
-│   │   └── services/         # local + OpenAI AI logic
+│   │   ├── main.py
+│   │   ├── routers/
+│   │   └── services/      # local NLP + RAG
+│   ├── run.ps1              # stable Windows start script
 │   └── requirements.txt
 └── frontend/
     └── src/
-        ├── App.tsx           # Main UI
-        └── api.ts            # API client
+        ├── App.tsx
+        └── api.ts
 ```
 
 ## API endpoints
 
-| Method | Path                              | Description        |
-| ------ | --------------------------------- | ------------------ |
-| GET    | `/api/health`                     | Health & AI mode   |
-| GET    | `/api/documents`                  | List documents     |
-| POST   | `/api/documents`                  | Create document    |
-| POST   | `/api/documents/{id}/analyze`     | Run AI analysis    |
-| POST   | `/api/documents/{id}/chat`        | Chat with document |
-| DELETE | `/api/documents/{id}`             | Delete document    |
+| Method | Path                              | Description           |
+| ------ | --------------------------------- | --------------------- |
+| GET    | `/api/health`                     | Health & features     |
+| GET    | `/api/documents`                  | List documents        |
+| POST   | `/api/documents`                  | Create document       |
+| POST   | `/api/documents/upload`           | Upload text file      |
+| POST   | `/api/documents/{id}/analyze`     | Run AI analysis       |
+| POST   | `/api/documents/{id}/chat`        | Chat with document    |
+| DELETE | `/api/documents/{id}/messages`    | Clear chat history    |
+| DELETE | `/api/documents/{id}`             | Delete document       |

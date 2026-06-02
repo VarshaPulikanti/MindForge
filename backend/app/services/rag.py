@@ -12,13 +12,7 @@ class RetrievedChunk:
     score: float
 
 
-def chunk_text(text: str, chunk_size: int = 480, overlap: int = 80) -> list[str]:
-    text = re.sub(r"\s+", " ", text.strip())
-    if not text:
-        return []
-    if len(text) <= chunk_size:
-        return [text]
-
+def _split_long_text(text: str, chunk_size: int, overlap: int) -> list[str]:
     chunks: list[str] = []
     start = 0
     while start < len(text):
@@ -30,6 +24,25 @@ def chunk_text(text: str, chunk_size: int = 480, overlap: int = 80) -> list[str]
             break
         start = max(end - overlap, start + 1)
     return chunks
+
+
+def chunk_text(text: str, chunk_size: int = 480, overlap: int = 80) -> list[str]:
+    raw = text.strip()
+    if not raw:
+        return []
+
+    paragraphs = [re.sub(r"\s+", " ", p.strip()) for p in re.split(r"\n\s*\n", raw) if p.strip()]
+    if not paragraphs:
+        paragraphs = [re.sub(r"\s+", " ", raw)]
+
+    chunks: list[str] = []
+    for para in paragraphs:
+        if len(para) <= chunk_size:
+            chunks.append(para)
+        else:
+            chunks.extend(_split_long_text(para, chunk_size, overlap))
+
+    return chunks if chunks else [re.sub(r"\s+", " ", raw)]
 
 
 def retrieve_relevant(chunks: list[str], query: str, top_k: int = 5) -> list[RetrievedChunk]:

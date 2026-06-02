@@ -1,7 +1,7 @@
 import json
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -170,6 +170,15 @@ async def list_analyses(document_id: int, db: AsyncSession = Depends(get_db)) ->
         select(Analysis).where(Analysis.document_id == document_id).order_by(Analysis.created_at.desc())
     )
     return [_analysis_out(a) for a in result.scalars().all()]
+
+
+@router.delete("/{document_id}/messages", status_code=204)
+async def clear_messages(document_id: int, db: AsyncSession = Depends(get_db)) -> None:
+    doc = await db.get(Document, document_id)
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+    await db.execute(delete(ChatMessage).where(ChatMessage.document_id == document_id))
+    await db.commit()
 
 
 @router.get("/{document_id}/messages", response_model=list[ChatMessageOut])

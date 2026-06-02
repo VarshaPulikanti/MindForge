@@ -38,8 +38,7 @@ app.include_router(documents.router)
 async def health() -> HealthOut:
     return HealthOut(
         status="ok",
-        ai_provider="openai" if settings.has_openai else "local",
-        openai_configured=settings.has_openai,
+        ai_provider="local",
         features={
             "rag_tfidf": True,
             "readability_metrics": HAS_TEXTSTAT,

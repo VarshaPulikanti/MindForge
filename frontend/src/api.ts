@@ -41,6 +41,8 @@ export const api = {
     request<Analysis>(`/documents/${id}/analyze`, { method: "POST" }),
   listAnalyses: (id: number) => request<Analysis[]>(`/documents/${id}/analyses`),
   listMessages: (id: number) => request<ChatMessage[]>(`/documents/${id}/messages`),
+  clearMessages: (id: number) =>
+    request<void>(`/documents/${id}/messages`, { method: "DELETE" }),
   chat: (id: number, message: string) =>
     request<ChatMessage[]>(`/documents/${id}/chat`, {
       method: "POST",

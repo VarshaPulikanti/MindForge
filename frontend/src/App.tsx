@@ -3,9 +3,18 @@ import { api } from "./api";
 import type { Analysis, ChatMessage, Document, Health } from "./types";
 import "./App.css";
 
+const CHAT_SUGGESTIONS = [
+  "What is this about?",
+  "Summarize",
+  "Sentiment",
+  "Keywords",
+  "Key points",
+  "Readability",
+] as const;
+
 const SAMPLE_TEXT = `Artificial intelligence is transforming how we work, learn, and create. 
 Modern language models can summarize documents, answer questions, and detect sentiment with remarkable accuracy.
-This platform combines local NLP with optional cloud models, so you can experiment with AI pipelines even without an API key.
+This platform runs entirely on local NLP — no API keys or cloud services required.
 Upload any article, notes, or essay — then analyze it and chat about the content using RAG-powered retrieval.`;
 
 function sentimentClass(s: string) {
@@ -29,6 +38,9 @@ export default function App() {
   const [content, setContent] = useState(SAMPLE_TEXT);
   const [chatInput, setChatInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [chatLoading, setChatLoading] = useState(false);
+  const [docExpanded, setDocExpanded] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -52,6 +64,7 @@ export default function App() {
 
   const selectDocument = async (id: number) => {
     setSelectedId(id);
+    setDocExpanded(false);
     setError(null);
     try {
       const [analyses, msgs] = await Promise.all([
@@ -68,20 +81,39 @@ export default function App() {
 
   const handleCreate = async (e: FormEvent) => {
     e.preventDefault();
-    setLoading(true);
+    const trimmedTitle = title.trim();
+    const trimmedContent = content.trim();
+    if (!trimmedTitle) {
+      setError("Please enter a title.");
+      return;
+    }
+    if (trimmedContent.length < 10) {
+      setError(`Document text must be at least 10 characters (currently ${trimmedContent.length}).`);
+      return;
+    }
+    setSaving(true);
     setError(null);
     try {
-      const doc = await api.createDocument(title, content);
+      const doc = await api.createDocument(trimmedTitle, trimmedContent);
       await loadDocuments();
       setSelectedId(doc.id);
       setAnalysis(null);
       setAnalysisHistory([]);
       setMessages([]);
-      await selectDocument(doc.id);
+      try {
+        await selectDocument(doc.id);
+      } catch {
+        // Document saved; analyses/messages load is optional
+      }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to create document");
+      const msg = err instanceof Error ? err.message : "Failed to create document";
+      if (msg === "Failed to fetch" || msg.includes("NetworkError")) {
+        setError("Cannot reach the API. Is the backend running on port 8000?");
+      } else {
+        setError(msg);
+      }
     } finally {
-      setLoading(false);
+      setSaving(false);
     }
   };
 
@@ -123,7 +155,7 @@ export default function App() {
   const handleChat = async (e: FormEvent) => {
     e.preventDefault();
     if (!selectedId || !chatInput.trim()) return;
-    setLoading(true);
+    setChatLoading(true);
     setError(null);
     const text = chatInput.trim();
     setChatInput("");
@@ -134,8 +166,27 @@ export default function App() {
       setError(err instanceof Error ? err.message : "Chat failed");
       setChatInput(text);
     } finally {
-      setLoading(false);
+      setChatLoading(false);
     }
+  };
+
+  const handleClearChat = async () => {
+    if (!selectedId || messages.length === 0) return;
+    if (!confirm("Clear all chat messages for this document?")) return;
+    setChatLoading(true);
+    setError(null);
+    try {
+      await api.clearMessages(selectedId);
+      setMessages([]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not clear chat");
+    } finally {
+      setChatLoading(false);
+    }
+  };
+
+  const sendSuggestion = (text: string) => {
+    setChatInput(text);
   };
 
   const handleDelete = async (id: number) => {
@@ -184,8 +235,8 @@ export default function App() {
         {health && (
           <div className="header-badges">
             <div className="health-badge mono">
-              <span className={`dot ${health.openai_configured ? "dot-on" : "dot-off"}`} />
-              {health.ai_provider} mode
+              <span className="dot dot-on" />
+              Local NLP
             </div>
             {health.features.rag_tfidf && (
               <div className="health-badge mono feature-badge">RAG · TF-IDF</div>
@@ -249,13 +300,19 @@ export default function App() {
               placeholder="Paste your text here (min 10 characters)..."
               rows={6}
               required
-              minLength={10}
             />
+            <p className={`char-count ${content.trim().length < 10 ? "char-count-warn" : ""}`}>
+              {content.trim().length} / 10 characters minimum
+            </p>
             <div className="form-actions">
-              <button type="submit" className="btn btn-primary" disabled={loading}>
-                Save document
+              <button
+                type="submit"
+                className="btn btn-primary"
+                disabled={saving || content.trim().length < 10 || !title.trim()}
+              >
+                {saving ? "Saving…" : "Save document"}
               </button>
-              <label className="btn btn-ghost upload-btn">
+              <label className={`btn btn-ghost upload-btn ${saving ? "disabled" : ""}`}>
                 Upload .txt/.md
                 <input
                   ref={fileRef}
@@ -263,6 +320,7 @@ export default function App() {
                   accept=".txt,.md,.csv"
                   onChange={handleUpload}
                   hidden
+                  disabled={saving}
                 />
               </label>
             </div>
@@ -281,7 +339,7 @@ export default function App() {
                 <li>TF-IDF semantic retrieval (RAG pipeline)</li>
                 <li>Readability & document metrics</li>
                 <li>Analysis history & JSON export</li>
-                <li>Local NLP or OpenAI GPT</li>
+                <li>100% local NLP — TextBlob + TF-IDF RAG</li>
               </ul>
             </div>
           ) : (
@@ -303,8 +361,27 @@ export default function App() {
                     {loading ? "Working…" : "Run AI analysis"}
                   </button>
                 </div>
-                <p className="doc-content">{selected.content}</p>
+                <p className={`doc-content ${docExpanded ? "doc-content-expanded" : ""}`}>
+                  {selected.content}
+                </p>
+                {selected.content.length > 320 && (
+                  <button
+                    type="button"
+                    className="btn btn-ghost btn-sm doc-toggle"
+                    onClick={() => setDocExpanded((v) => !v)}
+                  >
+                    {docExpanded ? "Show less" : "Show full text"}
+                  </button>
+                )}
               </section>
+
+              {!analysis && (
+                <section className="panel nudge-panel">
+                  <p>
+                    Run AI analysis to see summary, sentiment, keywords, and metrics.
+                  </p>
+                </section>
+              )}
 
               {analysis?.metrics && (
                 <section className="panel metrics-panel">
@@ -429,16 +506,39 @@ export default function App() {
               )}
 
               <section className="panel chat-panel">
-                <h2>RAG chat</h2>
+                <div className="panel-head chat-panel-head">
+                  <h2>RAG chat</h2>
+                  {messages.length > 0 && (
+                    <button
+                      type="button"
+                      className="btn btn-ghost btn-sm"
+                      onClick={handleClearChat}
+                      disabled={chatLoading}
+                    >
+                      Clear chat
+                    </button>
+                  )}
+                </div>
                 <p className="rag-note">
-                  Each reply uses TF-IDF retrieval over {selected.chunk_count} indexed chunks.
+                  Local TF-IDF · {selected.chunk_count} chunk
+                  {selected.chunk_count === 1 ? "" : "s"} · no API key
                 </p>
+                <div className="chat-suggestions">
+                  {CHAT_SUGGESTIONS.map((s) => (
+                    <button
+                      key={s}
+                      type="button"
+                      className="suggestion-chip"
+                      onClick={() => sendSuggestion(s)}
+                      disabled={chatLoading || loading}
+                    >
+                      {s}
+                    </button>
+                  ))}
+                </div>
                 <div className="chat-messages">
-                  {messages.length === 0 && (
-                    <p className="chat-hint">
-                      Try: &quot;Summarize this&quot;, &quot;What is the sentiment?&quot;, or
-                      &quot;What is the readability grade?&quot;
-                    </p>
+                  {messages.length === 0 && !chatLoading && (
+                    <p className="chat-hint">Tap a suggestion above or type your question.</p>
                   )}
                   {messages.map((m) => (
                     <div key={m.id} className={`bubble bubble-${m.role}`}>
@@ -446,22 +546,31 @@ export default function App() {
                         {m.role}
                         {m.rag_chunks_used ? ` · ${m.rag_chunks_used} chunks` : ""}
                       </span>
-                      <p>{m.content}</p>
+                      <p className="bubble-text">{m.content}</p>
                     </div>
                   ))}
+                  {chatLoading && (
+                    <div className="bubble bubble-assistant bubble-typing">
+                      <span className="bubble-role">assistant</span>
+                      <p className="chat-hint">Thinking…</p>
+                    </div>
+                  )}
                   <div ref={chatEndRef} />
                 </div>
-                <form className="chat-form" onSubmit={handleChat}>
+                <form
+                  className="chat-form"
+                  onSubmit={handleChat}
+                >
                   <input
                     value={chatInput}
                     onChange={(e) => setChatInput(e.target.value)}
                     placeholder="Ask a question about the document…"
-                    disabled={loading}
+                    disabled={chatLoading || loading}
                   />
                   <button
                     type="submit"
                     className="btn btn-primary"
-                    disabled={loading || !chatInput.trim()}
+                    disabled={chatLoading || loading || !chatInput.trim()}
                   >
                     Send
                   </button>

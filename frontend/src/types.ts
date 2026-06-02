@@ -44,7 +44,6 @@ export interface ChatMessage {
 export interface Health {
   status: string;
   ai_provider: string;
-  openai_configured: boolean;
   features: {
     rag_tfidf: boolean;
     readability_metrics: boolean;

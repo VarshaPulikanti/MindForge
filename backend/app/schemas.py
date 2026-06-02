@@ -65,5 +65,4 @@ class ChatMessageOut(BaseModel):
 class HealthOut(BaseModel):
     status: str
     ai_provider: str
-    openai_configured: bool
     features: dict[str, Any]
