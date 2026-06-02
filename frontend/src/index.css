@@ -1,0 +1,146 @@
+:root {
+  --bg: #0a0b0f;
+  --surface: #12141c;
+  --surface-2: #1a1d28;
+  --border: #2a2f3f;
+  --text: #e8eaf0;
+  --muted: #8b92a8;
+  --accent: #6c8cff;
+  --accent-dim: #4a62b8;
+  --positive: #3dd68c;
+  --negative: #f07178;
+  --neutral: #c9a227;
+  --glow: rgba(108, 140, 255, 0.15);
+  font-family: "DM Sans", system-ui, sans-serif;
+  line-height: 1.5;
+  color: var(--text);
+  background: var(--bg);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background:
+    radial-gradient(ellipse 80% 50% at 50% -20%, var(--glow), transparent),
+    var(--bg);
+}
+
+#root {
+  min-height: 100vh;
+}
+
+button,
+input,
+textarea {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+textarea,
+input {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--text);
+  padding: 0.75rem 1rem;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+textarea:focus,
+input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--glow);
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.6rem 1.1rem;
+  border-radius: 10px;
+  border: none;
+  font-weight: 600;
+  transition: transform 0.1s, opacity 0.15s, background 0.15s;
+}
+
+.btn:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, var(--accent), var(--accent-dim));
+  color: #fff;
+}
+
+.btn-primary:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+
+.btn-ghost {
+  background: transparent;
+  color: var(--muted);
+  border: 1px solid var(--border);
+}
+
+.btn-ghost:hover:not(:disabled) {
+  color: var(--text);
+  border-color: var(--muted);
+}
+
+.btn-danger {
+  background: transparent;
+  color: var(--negative);
+  border: 1px solid transparent;
+}
+
+.btn-danger:hover:not(:disabled) {
+  background: rgba(240, 113, 120, 0.1);
+}
+
+.chip {
+  display: inline-block;
+  padding: 0.2rem 0.65rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+.chip-positive {
+  background: rgba(61, 214, 140, 0.15);
+  color: var(--positive);
+}
+
+.chip-negative {
+  background: rgba(240, 113, 120, 0.15);
+  color: var(--negative);
+}
+
+.chip-neutral {
+  background: rgba(201, 162, 39, 0.15);
+  color: var(--neutral);
+}
+
+.mono {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 0.8rem;
+}
