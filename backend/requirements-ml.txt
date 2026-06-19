@@ -1,0 +1,3 @@
+# Optional ML extras — hybrid RAG with dense embeddings (recommended for local dev)
+-r requirements.txt
+sentence-transformers>=3.0.0

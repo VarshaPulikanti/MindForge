@@ -46,6 +46,9 @@ export interface Health {
   ai_provider: string;
   features: {
     rag_tfidf: boolean;
+    rag_embeddings?: boolean;
+    retrieval_mode?: "hybrid" | "tfidf";
+    embedding_model?: string | null;
     readability_metrics: boolean;
     file_upload: boolean;
     analysis_history: boolean;

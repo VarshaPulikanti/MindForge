@@ -8,6 +8,7 @@ from app.database import init_db
 from app.routers import documents
 from app.schemas import HealthOut
 from app.services.metrics import HAS_TEXTSTAT
+from app.services.rag import get_retrieval_status
 
 
 @asynccontextmanager
@@ -40,7 +41,7 @@ async def health() -> HealthOut:
         status="ok",
         ai_provider="local",
         features={
-            "rag_tfidf": True,
+            **get_retrieval_status(),
             "readability_metrics": HAS_TEXTSTAT,
             "file_upload": True,
             "analysis_history": True,

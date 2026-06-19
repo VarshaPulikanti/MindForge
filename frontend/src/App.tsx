@@ -239,7 +239,11 @@ export default function App() {
               Local NLP
             </div>
             {health.features.rag_tfidf && (
-              <div className="health-badge mono feature-badge">RAG · TF-IDF</div>
+              <div className="health-badge mono feature-badge">
+                {health.features.retrieval_mode === "hybrid"
+                  ? "RAG · Hybrid (TF-IDF + MiniLM)"
+                  : "RAG · TF-IDF"}
+              </div>
             )}
           </div>
         )}
@@ -336,10 +340,10 @@ export default function App() {
                 system retrieves the most relevant chunks before answering.
               </p>
               <ul>
-                <li>TF-IDF semantic retrieval (RAG pipeline)</li>
+                <li>Hybrid RAG — TF-IDF + sentence embeddings (MiniLM)</li>
                 <li>Readability & document metrics</li>
                 <li>Analysis history & JSON export</li>
-                <li>100% local NLP — TextBlob + TF-IDF RAG</li>
+                <li>100% local NLP — no API keys required</li>
               </ul>
             </div>
           ) : (

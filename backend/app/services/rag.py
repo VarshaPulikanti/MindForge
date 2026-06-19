@@ -1,8 +1,11 @@
+import logging
 import re
 from dataclasses import dataclass
 
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -45,7 +48,7 @@ def chunk_text(text: str, chunk_size: int = 480, overlap: int = 80) -> list[str]
     return chunks if chunks else [re.sub(r"\s+", " ", raw)]
 
 
-def retrieve_relevant(chunks: list[str], query: str, top_k: int = 5) -> list[RetrievedChunk]:
+def retrieve_tfidf(chunks: list[str], query: str, top_k: int = 5) -> list[RetrievedChunk]:
     if not chunks:
         return []
     if len(chunks) == 1:
@@ -69,6 +72,39 @@ def retrieve_relevant(chunks: list[str], query: str, top_k: int = 5) -> list[Ret
     if not results:
         results = [RetrievedChunk(index=0, text=chunks[0], score=0.0)]
     return results
+
+
+def retrieve_relevant(chunks: list[str], query: str, top_k: int = 5) -> list[RetrievedChunk]:
+    from app.config import settings
+
+    if settings.use_embedding_rag:
+        try:
+            from app.services import embedding_rag
+
+            if embedding_rag.is_available():
+                return embedding_rag.retrieve_hybrid(chunks, query, top_k)
+        except Exception as exc:
+            logger.warning("Hybrid retrieval failed, falling back to TF-IDF: %s", exc)
+
+    return retrieve_tfidf(chunks, query, top_k)
+
+
+def get_retrieval_status() -> dict[str, str | bool | None]:
+    from app.config import settings
+    from app.services import embedding_rag
+
+    embeddings_installed = embedding_rag.is_available()
+    if settings.use_embedding_rag and embeddings_installed:
+        mode = "hybrid"
+    else:
+        mode = "tfidf"
+
+    return {
+        "retrieval_mode": mode,
+        "rag_tfidf": True,
+        "rag_embeddings": embeddings_installed,
+        "embedding_model": embedding_rag.MODEL_NAME if embeddings_installed else None,
+    }
 
 
 def format_rag_context(chunks: list[RetrievedChunk]) -> str:
