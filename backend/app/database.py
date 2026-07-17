@@ -21,8 +21,18 @@ class Base(DeclarativeBase):
 
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
-    async with async_session() as session:
-        yield session
+    from fastapi import HTTPException
+
+    try:
+        async with async_session() as session:
+            yield session
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Database connection failed: {exc.__class__.__name__}: {exc}",
+        ) from exc
 
 
 async def _migrate(conn) -> None:

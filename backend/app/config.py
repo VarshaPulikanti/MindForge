@@ -85,24 +85,31 @@ class Settings(BaseSettings):
 
     @property
     def database_connect_args(self) -> dict:
+        from urllib.parse import urlparse
+
         raw = self.effective_database_url.lower()
         async_url = self.async_database_url.lower()
         if "sqlite" in async_url:
             return {"timeout": 30}
-        # Render/Neon external URLs (and any sslmode=require) need SSL for asyncpg
-        needs_ssl = any(
-            token in raw
-            for token in (
-                "sslmode=require",
-                "sslmode=verify",
-                ".render.com",
-                ".neon.tech",
-                "supabase.co",
-            )
+        if "asyncpg" not in async_url and "postgresql" not in async_url:
+            return {}
+
+        host = (urlparse(self.async_database_url).hostname or "").lower()
+        if host in {"localhost", "127.0.0.1", "::1"}:
+            return {}
+
+        # Render *internal* hosts look like "dpg-xxxx-a" (no dots) and skip SSL.
+        # External Render/Neon hosts need SSL; also honor sslmode=require in the raw URL.
+        internal_render = host.startswith("dpg-") and "." not in host
+        if internal_render:
+            return {}
+
+        needs_ssl = (
+            "." in host
+            or "sslmode=require" in raw
+            or "sslmode=verify" in raw
         )
-        if needs_ssl:
-            return {"ssl": True}
-        return {}
+        return {"ssl": True} if needs_ssl else {}
 
     @property
     def storage_mode(self) -> str:
