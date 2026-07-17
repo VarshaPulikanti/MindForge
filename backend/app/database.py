@@ -10,7 +10,8 @@ _db_url = settings.async_database_url
 engine = create_async_engine(
     _db_url,
     echo=False,
-    connect_args={"timeout": 30} if "sqlite" in _db_url else {},
+    connect_args=settings.database_connect_args,
+    pool_pre_ping=True,
 )
 async_session = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 

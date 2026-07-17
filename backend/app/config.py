@@ -54,12 +54,55 @@ class Settings(BaseSettings):
 
     @property
     def async_database_url(self) -> str:
+        """Convert DATABASE_URL to asyncpg form and drop libpq-only query params."""
+        from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
+
         url = self.effective_database_url
         if url.startswith("postgres://"):
-            return url.replace("postgres://", "postgresql+asyncpg://", 1)
-        if url.startswith("postgresql://") and "+asyncpg" not in url:
-            return url.replace("postgresql://", "postgresql+asyncpg://", 1)
-        return url
+            url = url.replace("postgres://", "postgresql+asyncpg://", 1)
+        elif url.startswith("postgresql://") and "+asyncpg" not in url:
+            url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
+
+        if "+asyncpg" not in url:
+            return url
+
+        # asyncpg via SQLAlchemy rejects sslmode/channel_binding as connect kwargs
+        parsed = urlparse(url)
+        kept = [
+            (k, v)
+            for k, v in parse_qsl(parsed.query, keep_blank_values=True)
+            if k.lower()
+            not in {
+                "sslmode",
+                "ssl",
+                "channel_binding",
+                "sslrootcert",
+                "sslcert",
+                "sslkey",
+            }
+        ]
+        return urlunparse(parsed._replace(query=urlencode(kept)))
+
+    @property
+    def database_connect_args(self) -> dict:
+        raw = self.effective_database_url.lower()
+        async_url = self.async_database_url.lower()
+        if "sqlite" in async_url:
+            return {"timeout": 30}
+        # Render/Neon external URLs (and any sslmode=require) need SSL for asyncpg
+        needs_ssl = any(
+            token in raw
+            for token in (
+                "sslmode=require",
+                "sslmode=verify",
+                ".render.com",
+                ".neon.tech",
+                "supabase.co",
+            )
+        )
+        if needs_ssl:
+            return {"ssl": True}
+        return {}
 
     @property
     def storage_mode(self) -> str:
