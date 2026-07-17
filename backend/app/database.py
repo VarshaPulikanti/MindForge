@@ -35,7 +35,13 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
         ) from exc
 
 
-async def _migrate(conn) -> None:
+async def _migrate() -> None:
+    """Run each DDL in its own transaction.
+
+    On PostgreSQL, one failed statement aborts the whole transaction. If migrations
+    shared a transaction with create_all, a duplicate-column error would roll back
+    newly created tables (e.g. users).
+    """
     migrations = [
         "ALTER TABLE documents ADD COLUMN source_type VARCHAR(16) DEFAULT 'paste'",
         "ALTER TABLE documents ADD COLUMN file_name VARCHAR(255)",
@@ -45,7 +51,8 @@ async def _migrate(conn) -> None:
     ]
     for stmt in migrations:
         try:
-            await conn.execute(text(stmt))
+            async with engine.begin() as conn:
+                await conn.execute(text(stmt))
         except Exception:
             pass
 
@@ -64,4 +71,5 @@ async def init_db() -> None:
     async with engine.begin() as conn:
         await _sqlite_pragmas(conn)
         await conn.run_sync(Base.metadata.create_all)
-        await _migrate(conn)
+
+    await _migrate()
