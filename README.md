@@ -15,9 +15,10 @@ MindForge is a full-stack **retrieval-augmented generation (RAG)** app built fro
 | Document chunking | Paragraph-aware splitting with overlap |
 | Lexical retrieval | TF-IDF + cosine similarity (scikit-learn) |
 | Dense retrieval | `all-MiniLM-L6-v2` sentence embeddings (optional) |
+| Vector store | ChromaDB — embeddings persisted at index time |
 | Hybrid fusion | Reciprocal Rank Fusion (RRF) of TF-IDF + dense scores |
 | Analysis | TextBlob sentiment, TF-IDF keywords, readability metrics |
-| Generation | Extractive QA over retrieved chunks (local, no LLM API) |
+| Generation | Gemini / Groq LLM over retrieved chunks (free API) |
 
 **Resume bullets (copy-paste):**
 
@@ -68,7 +69,8 @@ flowchart LR
 
 | Layer | Tech |
 | ----- | ---- |
-| Backend | Python 3.12, FastAPI, SQLAlchemy, SQLite |
+| Backend | Python 3.12, FastAPI, SQLAlchemy, SQLite / PostgreSQL |
+| Auth | JWT (register / login), bcrypt password hashing |
 | ML/NLP | scikit-learn, TextBlob, sentence-transformers (optional) |
 | Frontend | React 19, TypeScript, Vite |
 | Deploy | Render (API), Vercel (UI) |
@@ -129,30 +131,101 @@ Check the header badge: **RAG · Hybrid (TF-IDF + MiniLM)** means embeddings are
 | Variable | Default | Description |
 | -------- | ------- | ----------- |
 | `CORS_ORIGINS` | localhost:5173 | Comma-separated allowed origins |
-| `DATABASE_URL` | LOCALAPPDATA path | SQLite connection string |
+| `DATABASE_URL` | LOCALAPPDATA path | SQLite (local) or PostgreSQL URL (production) |
+| `JWT_SECRET` | (dev default) | **Required in production** — random secret for tokens |
+| `JWT_EXPIRE_HOURS` | `72` | Token lifetime |
 | `USE_EMBEDDING_RAG` | `true` | Set `false` on low-memory deploy (TF-IDF only) |
+| `USE_VECTOR_STORE` | `true` | ChromaDB for stored embeddings (local); `false` on Render |
+| `LLM_PROVIDER` | `local` | `gemini` (recommended), `groq`, `ollama`, or `local` |
+| `GEMINI_API_KEY` | (empty) | Free key from [aistudio.google.com/apikey](https://aistudio.google.com/apikey) |
+| `GEMINI_MODEL` | `gemini-2.0-flash` | Gemini model for chat generation |
+| `GROQ_API_KEY` | (empty) | Groq API key (if using `groq`) |
+| `OLLAMA_BASE_URL` | `http://127.0.0.1:11434` | Local Ollama only (not for Render) |
+| `OLLAMA_MODEL` | `llama3.2` | Ollama model name |
 
 Copy `backend/.env.example` to `backend/.env` and adjust as needed.
 
+### LLM (free RAG generation)
+
+| Where | Setup |
+| ----- | ----- |
+| **Local** | `LLM_PROVIDER=gemini` + `GEMINI_API_KEY` in `backend/.env` |
+| **Render (web)** | Same vars in Render **Environment** → redeploy backend |
+| **Ollama** | Local dev only — cannot run on Render free tier |
+
+Chat flow: retrieve chunks → **Gemini generates answer** (falls back to extractive if key missing or API fails).
+
 ---
 
-## Deployment
+## Deployment (persistent data)
 
 | Service | URL |
 | ------- | --- |
 | Frontend | https://mind-forge-phi.vercel.app |
 | Backend | https://mindforge-api-zixn.onrender.com |
 
-**Render env vars:**
+### 1. Create Render PostgreSQL (free tier)
+
+1. Render Dashboard → **New** → **PostgreSQL**
+2. Copy the **Internal Database URL** (starts with `postgresql://`)
+
+### 2. Render web service env vars
 
 ```
 PYTHON_VERSION=3.12.7
-DATABASE_URL=sqlite+aiosqlite:///./mindforge.db
+DATABASE_URL=<paste Render Postgres URL>
+JWT_SECRET=<long random string>
 CORS_ORIGINS=https://mind-forge-phi.vercel.app
+
+# Low-memory free tier: disk is wiped on restart, so disable disk-based RAG
 USE_EMBEDDING_RAG=false
+USE_VECTOR_STORE=false
+
+# Free LLM for RAG chat (Gemini hosts the model — no GPU/disk needed on Render)
+LLM_PROVIDER=gemini
+GEMINI_API_KEY=<paste from aistudio.google.com/apikey>
+GEMINI_MODEL=gemini-2.5-flash
 ```
 
-**Vercel:** root directory `frontend`. API proxied via `frontend/vercel.json` → Render backend.
+**Build command:** `pip install -r requirements.txt`
+**Start command:** `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
+**Root directory:** `backend`
+
+> On the free tier, install only `requirements.txt` (NOT `requirements-ml.txt`).
+> `sentence-transformers` + `chromadb` need too much RAM/disk, so the app
+> automatically runs **TF-IDF retrieval + Gemini generation** there.
+
+1. Render Dashboard → your **mindforge-api** web service → **Environment**
+2. Add each variable above (or edit existing ones)
+3. **Save** — Render redeploys automatically
+
+After deploy, open `https://mindforge-api-zixn.onrender.com/api/health` and check:
+
+```json
+"ai_provider": "gemini",
+"features": { "llm_enabled": true, "llm_provider": "gemini", "vector_store": false }
+```
+
+The Vercel UI header should show **LLM · gemini** when chat uses the deployed API.
+
+### 3. Vercel
+
+Root directory: `frontend`. API proxied via `frontend/vercel.json` → Render backend.
+
+No extra Vercel env vars needed for LLM — Gemini runs from the **Render backend** only.
+
+Tables are created automatically on first backend startup.
+
+> **Do not use** `sqlite+aiosqlite:///./mindforge.db` on Render — that disk is temporary and data is lost on restart. Use PostgreSQL.
+
+### What runs where
+
+| Component | Local | Render (free tier) |
+| --------- | ----- | ------------------ |
+| Database | SQLite (your disk) | PostgreSQL (persistent) |
+| Dense retrieval | MiniLM embeddings | off (TF-IDF only) |
+| Vector store | ChromaDB (your disk) | off (no persistent disk) |
+| Generation | Gemini LLM | Gemini LLM |
 
 ---
 
@@ -184,13 +257,18 @@ project/
 | Method | Path | Description |
 | ------ | ---- | ----------- |
 | GET | `/api/health` | Status, retrieval mode, feature flags |
-| GET | `/api/documents` | List documents |
+| POST | `/api/auth/register` | Create account |
+| POST | `/api/auth/login` | Log in, get JWT |
+| GET | `/api/auth/me` | Current user (requires auth) |
+| GET | `/api/documents` | List your documents |
 | POST | `/api/documents` | Create document |
 | POST | `/api/documents/upload` | Upload .txt / .md / .csv |
 | POST | `/api/documents/{id}/analyze` | Run NLP analysis |
 | POST | `/api/documents/{id}/chat` | RAG chat |
 | DELETE | `/api/documents/{id}/messages` | Clear chat history |
 | DELETE | `/api/documents/{id}` | Delete document |
+
+All `/api/documents/*` routes require `Authorization: Bearer <token>`.
 
 ---
 

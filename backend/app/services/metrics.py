@@ -31,11 +31,14 @@ def compute_metrics(text: str) -> dict[str, Any]:
         "subjectivity": round(blob.sentiment.subjectivity, 4),
     }
 
+    metrics["readability_grade"] = None
+    metrics["flesch_reading_ease"] = None
     if HAS_TEXTSTAT and len(text) >= 50:
-        metrics["readability_grade"] = round(textstat.flesch_kincaid_grade(text), 1)
-        metrics["flesch_reading_ease"] = round(textstat.flesch_reading_ease(text), 1)
-    else:
-        metrics["readability_grade"] = None
-        metrics["flesch_reading_ease"] = None
+        try:
+            metrics["readability_grade"] = round(textstat.flesch_kincaid_grade(text), 1)
+            metrics["flesch_reading_ease"] = round(textstat.flesch_reading_ease(text), 1)
+        except (KeyError, ValueError, ZeroDivisionError):
+            # textstat CMU dict lacks many acronyms (e.g. "nlp", "ai")
+            pass
 
     return metrics

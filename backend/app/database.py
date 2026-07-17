@@ -6,10 +6,11 @@ from sqlalchemy.orm import DeclarativeBase
 
 from app.config import settings
 
+_db_url = settings.async_database_url
 engine = create_async_engine(
-    settings.database_url,
+    _db_url,
     echo=False,
-    connect_args={"timeout": 30},
+    connect_args={"timeout": 30} if "sqlite" in _db_url else {},
 )
 async_session = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
@@ -29,6 +30,7 @@ async def _migrate(conn) -> None:
         "ALTER TABLE documents ADD COLUMN file_name VARCHAR(255)",
         "ALTER TABLE analyses ADD COLUMN metrics TEXT",
         "ALTER TABLE chat_messages ADD COLUMN rag_chunks_used INTEGER",
+        "ALTER TABLE documents ADD COLUMN user_id INTEGER REFERENCES users(id)",
     ]
     for stmt in migrations:
         try:
@@ -38,7 +40,7 @@ async def _migrate(conn) -> None:
 
 
 async def _sqlite_pragmas(conn) -> None:
-    if "sqlite" not in settings.database_url:
+    if "sqlite" not in _db_url:
         return
     await conn.execute(text("PRAGMA journal_mode=WAL"))
     await conn.execute(text("PRAGMA synchronous=NORMAL"))

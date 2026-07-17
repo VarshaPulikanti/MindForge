@@ -74,7 +74,12 @@ def retrieve_tfidf(chunks: list[str], query: str, top_k: int = 5) -> list[Retrie
     return results
 
 
-def retrieve_relevant(chunks: list[str], query: str, top_k: int = 5) -> list[RetrievedChunk]:
+def retrieve_relevant(
+    chunks: list[str],
+    query: str,
+    top_k: int = 5,
+    document_id: int | None = None,
+) -> list[RetrievedChunk]:
     from app.config import settings
 
     if settings.use_embedding_rag:
@@ -82,6 +87,17 @@ def retrieve_relevant(chunks: list[str], query: str, top_k: int = 5) -> list[Ret
             from app.services import embedding_rag
 
             if embedding_rag.is_available():
+                if document_id is not None:
+                    from app.services import vector_store
+
+                    if (
+                        settings.use_vector_store
+                        and vector_store.is_available()
+                        and vector_store.has_document(document_id)
+                    ):
+                        return embedding_rag.retrieve_hybrid_vectorstore(
+                            chunks, query, document_id, top_k
+                        )
                 return embedding_rag.retrieve_hybrid(chunks, query, top_k)
         except Exception as exc:
             logger.warning("Hybrid retrieval failed, falling back to TF-IDF: %s", exc)
@@ -91,7 +107,7 @@ def retrieve_relevant(chunks: list[str], query: str, top_k: int = 5) -> list[Ret
 
 def get_retrieval_status() -> dict[str, str | bool | None]:
     from app.config import settings
-    from app.services import embedding_rag
+    from app.services import embedding_rag, vector_store
 
     embeddings_installed = embedding_rag.is_available()
     if settings.use_embedding_rag and embeddings_installed:
@@ -104,6 +120,7 @@ def get_retrieval_status() -> dict[str, str | bool | None]:
         "rag_tfidf": True,
         "rag_embeddings": embeddings_installed,
         "embedding_model": embedding_rag.MODEL_NAME if embeddings_installed else None,
+        **vector_store.get_vector_store_status(),
     }
 
 

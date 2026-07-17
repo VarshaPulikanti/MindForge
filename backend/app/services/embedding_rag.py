@@ -88,3 +88,17 @@ def retrieve_hybrid(chunks: list[str], query: str, top_k: int = 5) -> list[Retri
     tfidf = retrieve_tfidf(chunks, query, top_k=top_k * 2)
     dense = retrieve_embeddings(chunks, query, top_k=top_k * 2)
     return _reciprocal_rank_fusion(tfidf, dense, top_k)
+
+
+def retrieve_hybrid_vectorstore(
+    chunks: list[str],
+    query: str,
+    document_id: int,
+    top_k: int = 5,
+) -> list[RetrievedChunk]:
+    """Hybrid RAG with dense retrieval from ChromaDB (pre-stored vectors)."""
+    from app.services import vector_store
+
+    tfidf = retrieve_tfidf(chunks, query, top_k=top_k * 2)
+    dense = vector_store.query(document_id, query, top_k=top_k * 2)
+    return _reciprocal_rank_fusion(tfidf, dense, top_k)

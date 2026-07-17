@@ -1,3 +1,4 @@
-# Optional ML extras — hybrid RAG with dense embeddings (recommended for local dev)
+# Optional ML extras — hybrid RAG with dense embeddings + ChromaDB vector store
 -r requirements.txt
 sentence-transformers>=3.0.0
+chromadb>=0.5.0

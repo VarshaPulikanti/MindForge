@@ -5,8 +5,9 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
 from app.database import init_db
-from app.routers import documents
+from app.routers import auth, documents
 from app.schemas import HealthOut
+from app.services.llm import get_llm_status
 from app.services.metrics import HAS_TEXTSTAT
 from app.services.rag import get_retrieval_status
 
@@ -32,16 +33,22 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(auth.router)
 app.include_router(documents.router)
 
 
 @app.get("/api/health", response_model=HealthOut)
 async def health() -> HealthOut:
+    llm_status = get_llm_status()
+    ai_provider = str(llm_status["llm_provider"]) if llm_status["llm_enabled"] else "local"
     return HealthOut(
         status="ok",
-        ai_provider="local",
+        ai_provider=ai_provider,
         features={
             **get_retrieval_status(),
+            **llm_status,
+            "storage_mode": settings.storage_mode,
+            "auth": True,
             "readability_metrics": HAS_TEXTSTAT,
             "file_upload": True,
             "analysis_history": True,

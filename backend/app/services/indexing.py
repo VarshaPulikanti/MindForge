@@ -1,8 +1,12 @@
+import logging
+
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Document, DocumentChunk
 from app.services.rag import chunk_text
+
+logger = logging.getLogger(__name__)
 
 
 async def index_document(db: AsyncSession, document: Document) -> int:
@@ -11,6 +15,16 @@ async def index_document(db: AsyncSession, document: Document) -> int:
     for i, text in enumerate(chunks):
         db.add(DocumentChunk(document_id=document.id, chunk_index=i, content=text))
     await db.flush()
+
+    try:
+        from app.config import settings
+        from app.services import vector_store
+
+        if settings.use_vector_store and vector_store.is_available():
+            vector_store.index_chunks(document.id, chunks)
+    except Exception as exc:
+        logger.warning("Vector store indexing failed for doc %s: %s", document.id, exc)
+
     return len(chunks)
 
 

@@ -1,6 +1,7 @@
 import { ChangeEvent, FormEvent, useCallback, useEffect, useRef, useState } from "react";
-import { api } from "./api";
-import type { Analysis, ChatMessage, Document, Health } from "./types";
+import AuthPage from "./AuthPage";
+import { api, getToken, setToken } from "./api";
+import type { Analysis, ChatMessage, Document, Health, User } from "./types";
 import "./App.css";
 
 const CHAT_SUGGESTIONS = [
@@ -12,10 +13,12 @@ const CHAT_SUGGESTIONS = [
   "Readability",
 ] as const;
 
+const SELECTED_DOC_KEY = "mindforge:selectedId";
+
 const SAMPLE_TEXT = `Artificial intelligence is transforming how we work, learn, and create. 
 Modern language models can summarize documents, answer questions, and detect sentiment with remarkable accuracy.
-This platform runs entirely on local NLP — no API keys or cloud services required.
-Upload any article, notes, or essay — then analyze it and chat about the content using RAG-powered retrieval.`;
+This platform uses hybrid RAG retrieval and optional Groq LLM for chat answers.
+Upload any article, notes, or essay — then analyze it and chat about the content.`;
 
 function sentimentClass(s: string) {
   if (s === "positive") return "chip-positive";
@@ -28,6 +31,8 @@ function scoreToPercent(score: number) {
 }
 
 export default function App() {
+  const [user, setUser] = useState<User | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
   const [health, setHealth] = useState<Health | null>(null);
   const [documents, setDocuments] = useState<Document[]>([]);
   const [selectedId, setSelectedId] = useState<number | null>(null);
@@ -55,7 +60,30 @@ export default function App() {
 
   useEffect(() => {
     api.health().then(setHealth).catch(() => setHealth(null));
-    loadDocuments().catch((e) => setError(String(e)));
+    const token = getToken();
+    if (!token) {
+      setAuthLoading(false);
+      return;
+    }
+    api
+      .me()
+      .then((u) => {
+        setUser(u);
+        return loadDocuments().then((docs) => {
+          const raw = sessionStorage.getItem(SELECTED_DOC_KEY);
+          if (!raw) return;
+          const id = Number(raw);
+          if (docs.some((d) => d.id === id)) {
+            return selectDocument(id);
+          }
+          sessionStorage.removeItem(SELECTED_DOC_KEY);
+        });
+      })
+      .catch(() => {
+        setToken(null);
+        setUser(null);
+      })
+      .finally(() => setAuthLoading(false));
   }, [loadDocuments]);
 
   useEffect(() => {
@@ -64,6 +92,7 @@ export default function App() {
 
   const selectDocument = async (id: number) => {
     setSelectedId(id);
+    sessionStorage.setItem(SELECTED_DOC_KEY, String(id));
     setDocExpanded(false);
     setError(null);
     try {
@@ -196,11 +225,15 @@ export default function App() {
       await api.deleteDocument(id);
       const docs = await loadDocuments();
       if (selectedId === id) {
-        setSelectedId(docs[0]?.id ?? null);
-        setAnalysis(null);
-        setAnalysisHistory([]);
-        setMessages([]);
-        if (docs[0]) await selectDocument(docs[0].id);
+        if (docs[0]) {
+          await selectDocument(docs[0].id);
+        } else {
+          setSelectedId(null);
+          sessionStorage.removeItem(SELECTED_DOC_KEY);
+          setAnalysis(null);
+          setAnalysisHistory([]);
+          setMessages([]);
+        }
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Delete failed");
@@ -222,6 +255,46 @@ export default function App() {
     URL.revokeObjectURL(url);
   };
 
+  const handleLogout = () => {
+    setToken(null);
+    setUser(null);
+    setDocuments([]);
+    setSelectedId(null);
+    setMessages([]);
+    setAnalysis(null);
+    setAnalysisHistory([]);
+    sessionStorage.removeItem(SELECTED_DOC_KEY);
+  };
+
+  const handleAuth = async (authedUser: User) => {
+    setUser(authedUser);
+    setError(null);
+    try {
+      const docs = await loadDocuments();
+      const raw = sessionStorage.getItem(SELECTED_DOC_KEY);
+      if (raw) {
+        const id = Number(raw);
+        if (docs.some((d) => d.id === id)) {
+          await selectDocument(id);
+        }
+      }
+    } catch (e) {
+      setError(String(e));
+    }
+  };
+
+  if (authLoading) {
+    return (
+      <div className="auth-page">
+        <p className="auth-loading">Loading…</p>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <AuthPage onAuth={handleAuth} />;
+  }
+
   return (
     <div className="app">
       <header className="header">
@@ -234,9 +307,12 @@ export default function App() {
         </div>
         {health && (
           <div className="header-badges">
+            <div className="health-badge mono user-badge">{user.email}</div>
             <div className="health-badge mono">
               <span className="dot dot-on" />
-              Local NLP
+              {health.features.llm_enabled
+                ? `LLM · ${health.features.llm_provider}`
+                : "Local NLP"}
             </div>
             {health.features.rag_tfidf && (
               <div className="health-badge mono feature-badge">
@@ -245,6 +321,19 @@ export default function App() {
                   : "RAG · TF-IDF"}
               </div>
             )}
+            {health.features.vector_store && (
+              <div className="health-badge mono feature-badge">
+                Vector DB · {health.features.vector_store_backend ?? "Chroma"}
+              </div>
+            )}
+            {health.features.llm_enabled && health.features.llm_model && (
+              <div className="health-badge mono feature-badge">
+                Gen · {health.features.llm_model}
+              </div>
+            )}
+            <button type="button" className="btn btn-ghost btn-sm" onClick={handleLogout}>
+              Log out
+            </button>
           </div>
         )}
       </header>
@@ -524,9 +613,30 @@ export default function App() {
                   )}
                 </div>
                 <p className="rag-note">
-                  Local TF-IDF · {selected.chunk_count} chunk
-                  {selected.chunk_count === 1 ? "" : "s"} · no API key
+                  {health?.features.retrieval_mode === "hybrid"
+                    ? "Hybrid retrieval (TF-IDF + MiniLM)"
+                    : "TF-IDF retrieval"}
+                  {health?.features.vector_store
+                    ? ` · vectors in ${health.features.vector_store_backend ?? "ChromaDB"}`
+                    : " · vectors computed on the fly"}
+                  {" · "}
+                  {health?.features.llm_enabled
+                    ? `LLM answers (${health.features.llm_provider})`
+                    : "Extractive answers (no LLM)"}
+                  {" · "}
+                  {selected.chunk_count} chunk
+                  {selected.chunk_count === 1 ? "" : "s"}
                 </p>
+                {health?.features.storage_mode === "ephemeral" && (
+                  <p className="rag-note rag-note-warn">
+                    Demo uses temporary storage — connect PostgreSQL on Render for persistent data.
+                  </p>
+                )}
+                {health?.features.storage_mode === "persistent" && (
+                  <p className="rag-note rag-note-ok">
+                    Your documents and chats are saved to your account.
+                  </p>
+                )}
                 <div className="chat-suggestions">
                   {CHAT_SUGGESTIONS.map((s) => (
                     <button

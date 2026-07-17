@@ -1,3 +1,9 @@
+export interface User {
+  id: number;
+  email: string;
+  created_at: string;
+}
+
 export interface Document {
   id: number;
   title: string;
@@ -49,6 +55,13 @@ export interface Health {
     rag_embeddings?: boolean;
     retrieval_mode?: "hybrid" | "tfidf";
     embedding_model?: string | null;
+    vector_store?: boolean;
+    vector_store_backend?: string | null;
+    llm_enabled?: boolean;
+    llm_provider?: "local" | "gemini" | "groq" | "ollama";
+    llm_model?: string | null;
+    storage_mode?: "local" | "ephemeral" | "persistent";
+    auth?: boolean;
     readability_metrics: boolean;
     file_upload: boolean;
     analysis_history: boolean;
