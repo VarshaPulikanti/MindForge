@@ -6,9 +6,9 @@
 
 ---
 
-## Why this project (for ML roles)
+## What it does
 
-MindForge is a full-stack **retrieval-augmented generation (RAG)** app built from scratch:
+MindForge is a full-stack **retrieval-augmented generation (RAG)** app:
 
 | ML/NLP component | Implementation |
 | ---------------- | -------------- |
@@ -19,17 +19,6 @@ MindForge is a full-stack **retrieval-augmented generation (RAG)** app built fro
 | Hybrid fusion | Reciprocal Rank Fusion (RRF) of TF-IDF + dense scores |
 | Analysis | TextBlob sentiment, TF-IDF keywords, readability metrics |
 | Generation | Gemini / Groq over retrieved chunks (extractive fallback) |
-
-**Resume bullets (copy-paste):**
-
-- Built a full-stack document intelligence app with **hybrid RAG** (TF-IDF + MiniLM embeddings + RRF fusion) for contextual Q&A over user documents.
-- Implemented an end-to-end **NLP pipeline**: chunking → dual retrieval → relevance scoring → LLM generation with extractive fallback; deployed FastAPI backend + React frontend.
-
-**Interview talking points:**
-
-1. *Why hybrid RAG?* TF-IDF catches exact terms; embeddings catch paraphrases. RRF merges ranked lists without tuning weights.
-2. *Why not OpenAI?* Retrieval and analysis run locally; generation uses free Gemini/Groq (or extractive mode with no key) — good for demos and cost control.
-3. *Trade-offs:* Production deploy uses TF-IDF only on low-memory hosts; full hybrid runs locally with `requirements-ml.txt`.
 
 ---
 
@@ -278,14 +267,6 @@ project/
 | DELETE | `/api/documents/{id}` | Delete document |
 
 All `/api/documents/*` and `/api/auth/me` routes require `Authorization: Bearer <token>`.
-
----
-
-## GitHub profile tips
-
-Add to repo **About**: `nlp`, `rag`, `machine-learning`, `fastapi`, `react`, `sentence-transformers`
-
-Pin this repo. Link the live demo in your resume and LinkedIn.
 
 ---
 
