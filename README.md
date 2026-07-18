@@ -1,6 +1,6 @@
 # MindForge
 
-**Local NLP + RAG document intelligence** — upload text, run analysis (summary, sentiment, keywords), and chat with hybrid retrieval. No OpenAI or API keys.
+**Local NLP + RAG document intelligence** — upload text, run analysis (summary, sentiment, keywords), and chat over hybrid retrieval. Generation uses a free Gemini/Groq API (or extractive fallback); no OpenAI.
 
 **Live demo:** [mind-forge-phi.vercel.app](https://mind-forge-phi.vercel.app) · [API docs](https://mindforge-api-zixn.onrender.com/docs)
 
@@ -18,17 +18,17 @@ MindForge is a full-stack **retrieval-augmented generation (RAG)** app built fro
 | Vector store | ChromaDB — embeddings persisted at index time |
 | Hybrid fusion | Reciprocal Rank Fusion (RRF) of TF-IDF + dense scores |
 | Analysis | TextBlob sentiment, TF-IDF keywords, readability metrics |
-| Generation | Gemini / Groq LLM over retrieved chunks (free API) |
+| Generation | Gemini / Groq over retrieved chunks (extractive fallback) |
 
 **Resume bullets (copy-paste):**
 
 - Built a full-stack document intelligence app with **hybrid RAG** (TF-IDF + MiniLM embeddings + RRF fusion) for contextual Q&A over user documents.
-- Implemented an end-to-end **NLP pipeline**: chunking → dual retrieval → relevance scoring → extractive answer generation; deployed FastAPI backend + React frontend.
+- Implemented an end-to-end **NLP pipeline**: chunking → dual retrieval → relevance scoring → LLM generation with extractive fallback; deployed FastAPI backend + React frontend.
 
 **Interview talking points:**
 
 1. *Why hybrid RAG?* TF-IDF catches exact terms; embeddings catch paraphrases. RRF merges ranked lists without tuning weights.
-2. *Why local?* Reproducible, no API cost, runs offline — good for demos and privacy-sensitive docs.
+2. *Why not OpenAI?* Retrieval and analysis run locally; generation uses free Gemini/Groq (or extractive mode with no key) — good for demos and cost control.
 3. *Trade-offs:* Production deploy uses TF-IDF only on low-memory hosts; full hybrid runs locally with `requirements-ml.txt`.
 
 ---
@@ -42,13 +42,13 @@ flowchart LR
   end
   subgraph Backend
     API[FastAPI]
-    DB[(SQLite)]
+    DB[(SQLite / Postgres)]
     Chunk[Chunker]
     TFIDF[TF-IDF retrieval]
     Emb[MiniLM embeddings]
     RRF[RRF fusion]
     NLP[TextBlob + metrics]
-    Chat[Extractive QA]
+    Gen[Gemini / extractive]
   end
   UI -->|REST| API
   API --> DB
@@ -57,11 +57,11 @@ flowchart LR
   Chunk --> Emb
   TFIDF --> RRF
   Emb --> RRF
-  RRF --> Chat
+  RRF --> Gen
   API --> NLP
 ```
 
-**Chat flow:** User question → chunk document → retrieve top-5 excerpts (hybrid or TF-IDF) → rank sentences in excerpts → compose answer with relevance scores.
+**Chat flow:** User question → retrieve top excerpts (hybrid or TF-IDF) → Gemini/Groq generates an answer from those chunks (falls back to extractive ranking if no key or the API fails).
 
 ---
 
@@ -96,6 +96,8 @@ pip install -r requirements-ml.txt   # hybrid RAG with MiniLM (recommended)
 python -m textblob.download_corpora
 ```
 
+Copy `backend/.env.example` to `backend/.env`. For LLM chat answers, set `LLM_PROVIDER=gemini` and a free `GEMINI_API_KEY` from [aistudio.google.com/apikey](https://aistudio.google.com/apikey). Without a key, chat still works in extractive mode.
+
 **Windows (recommended):**
 
 ```powershell
@@ -122,7 +124,7 @@ npm run dev
 
 Open http://localhost:5173
 
-Check the header badge: **RAG · Hybrid (TF-IDF + MiniLM)** means embeddings are active.
+Check the header badge: **RAG · Hybrid (TF-IDF + MiniLM)** means embeddings are active; **LLM · gemini** means generation is enabled.
 
 ---
 
@@ -138,12 +140,11 @@ Check the header badge: **RAG · Hybrid (TF-IDF + MiniLM)** means embeddings are
 | `USE_VECTOR_STORE` | `true` | ChromaDB for stored embeddings (local); `false` on Render |
 | `LLM_PROVIDER` | `local` | `gemini` (recommended), `groq`, `ollama`, or `local` |
 | `GEMINI_API_KEY` | (empty) | Free key from [aistudio.google.com/apikey](https://aistudio.google.com/apikey) |
-| `GEMINI_MODEL` | `gemini-2.0-flash` | Gemini model for chat generation |
+| `GEMINI_MODEL` | `gemini-2.5-flash` | Gemini model for chat generation |
 | `GROQ_API_KEY` | (empty) | Groq API key (if using `groq`) |
+| `GROQ_MODEL` | `llama-3.1-8b-instant` | Groq model name |
 | `OLLAMA_BASE_URL` | `http://127.0.0.1:11434` | Local Ollama only (not for Render) |
 | `OLLAMA_MODEL` | `llama3.2` | Ollama model name |
-
-Copy `backend/.env.example` to `backend/.env` and adjust as needed.
 
 ### LLM (free RAG generation)
 
@@ -160,7 +161,7 @@ Chat flow: retrieve chunks → **Gemini generates answer** (falls back to extrac
 ## Deployment (persistent data)
 
 | Service | URL |
-| ------- | --- |
+| ------- | ---- |
 | Frontend | https://mind-forge-phi.vercel.app |
 | Backend | https://mindforge-api-zixn.onrender.com |
 
@@ -187,12 +188,12 @@ GEMINI_API_KEY=<paste from aistudio.google.com/apikey>
 GEMINI_MODEL=gemini-2.5-flash
 ```
 
-**Build command:** `pip install -r requirements.txt`
-**Start command:** `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
+**Build command:** `pip install -r requirements.txt`  
+**Start command:** `uvicorn app.main:app --host 0.0.0.0 --port $PORT`  
 **Root directory:** `backend`
 
-> On the free tier, install only `requirements.txt` (NOT `requirements-ml.txt`).
-> `sentence-transformers` + `chromadb` need too much RAM/disk, so the app
+> On the free tier, install only `requirements.txt` (NOT `requirements-ml.txt`).  
+> `sentence-transformers` + `chromadb` need too much RAM/disk, so the app  
 > automatically runs **TF-IDF retrieval + Gemini generation** there.
 
 1. Render Dashboard → your **mindforge-api** web service → **Environment**
@@ -238,12 +239,16 @@ project/
 │   │   ├── main.py
 │   │   ├── routers/
 │   │   └── services/
-│   │       ├── rag.py           # TF-IDF + hybrid orchestration
-│   │       ├── embedding_rag.py # MiniLM + RRF
-│   │       ├── local_ai.py      # analysis + extractive chat
-│   │       └── ai.py
+│   │       ├── rag.py             # TF-IDF + hybrid orchestration
+│   │       ├── embedding_rag.py   # MiniLM + RRF
+│   │       ├── vector_store.py    # ChromaDB persistence
+│   │       ├── indexing.py        # Chunk + index pipeline
+│   │       ├── llm.py             # Gemini / Groq / Ollama
+│   │       ├── local_ai.py        # Analysis + extractive chat
+│   │       └── metrics.py
 │   ├── requirements.txt
-│   ├── requirements-ml.txt      # sentence-transformers
+│   ├── requirements-ml.txt        # sentence-transformers + chromadb
+│   ├── .env.example
 │   └── run.ps1
 └── frontend/
     ├── src/
@@ -263,12 +268,16 @@ project/
 | GET | `/api/documents` | List your documents |
 | POST | `/api/documents` | Create document |
 | POST | `/api/documents/upload` | Upload .txt / .md / .csv |
+| GET | `/api/documents/{id}` | Get one document |
+| POST | `/api/documents/{id}/index` | Re-index chunks / embeddings |
 | POST | `/api/documents/{id}/analyze` | Run NLP analysis |
+| GET | `/api/documents/{id}/analyses` | Analysis history |
 | POST | `/api/documents/{id}/chat` | RAG chat |
+| GET | `/api/documents/{id}/messages` | Chat history |
 | DELETE | `/api/documents/{id}/messages` | Clear chat history |
 | DELETE | `/api/documents/{id}` | Delete document |
 
-All `/api/documents/*` routes require `Authorization: Bearer <token>`.
+All `/api/documents/*` and `/api/auth/me` routes require `Authorization: Bearer <token>`.
 
 ---
 
