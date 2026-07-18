@@ -267,9 +267,3 @@ project/
 | DELETE | `/api/documents/{id}` | Delete document |
 
 All `/api/documents/*` and `/api/auth/me` routes require `Authorization: Bearer <token>`.
-
----
-
-## License
-
-MIT
